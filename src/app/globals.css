@@ -3,26 +3,25 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Force light theme to prevent dark mode flashing */
+html {
+  color-scheme: light;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  /* Prevent flash of unstyled content */
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 /* Improve placeholder text visibility */
@@ -30,13 +29,4 @@ input::placeholder,
 textarea::placeholder {
   color: #6b7280; /* gray-500 */
   opacity: 0.8;
-}
-
-/* Dark mode placeholder styling */
-@media (prefers-color-scheme: dark) {
-  input::placeholder,
-  textarea::placeholder {
-    color: #9ca3af; /* gray-400 */
-    opacity: 0.9;
-  }
 }

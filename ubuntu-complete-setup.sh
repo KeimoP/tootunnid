@@ -54,6 +54,18 @@ print_status "Email: $EMAIL"
 # 1. System Update
 print_status "📦 Updating system packages..."
 apt update && apt upgrade -y
+
+# Enable swap if not present (helps with memory issues)
+if [ ! -f /swapfile ]; then
+    print_status "💾 Creating swap file for better memory management..."
+    fallocate -l 2G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+    print_success "2GB swap file created"
+fi
+
 print_success "System updated"
 
 # 2. Install essential packages
@@ -140,9 +152,24 @@ print_success "Application cloned"
 print_status "📦 Installing application dependencies..."
 sudo -u $APP_USER bash << EOF
 cd $APP_DIR
-npm ci
+
+# Clear npm cache and node_modules to avoid conflicts
+echo "🧹 Cleaning npm cache and modules..."
+npm cache clean --force
+rm -rf node_modules package-lock.json
+
+# Install dependencies with memory optimization
+echo "📦 Installing dependencies (with memory optimization)..."
+npm install --no-audit --no-fund --prefer-offline
+
+# Update Prisma to latest version
+echo "📦 Updating Prisma..."
+npm install --save-dev prisma@latest --no-audit --no-fund
+npm install @prisma/client@latest --no-audit --no-fund
+
+echo "✅ Dependencies installed successfully"
 EOF
-print_success "Dependencies installed"
+print_success "Dependencies installed and Prisma updated"
 
 # 13. Create production environment file
 print_status "⚙️ Creating production environment..."
@@ -170,8 +197,107 @@ print_success "Environment file created"
 print_status "🗄️ Running database migrations..."
 sudo -u $APP_USER bash << EOF
 cd $APP_DIR
+export DATABASE_URL="postgresql://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME"
+
+# Create production Prisma schema for PostgreSQL
+echo "🔧 Creating production Prisma schema for PostgreSQL..."
+cat > prisma/schema.prisma << 'PRISMA_EOF'
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String        @id @default(cuid())
+  email            String        @unique
+  name             String
+  password         String
+  hourlyWage       Float         @default(0)
+  role             UserRole      @default(WORKER)
+  sharingCode      String?       @unique
+  profilePicture   String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  encryptedWage    String?
+  timeEntries      TimeEntry[]
+  receivedRequests WorkRequest[] @relation("ReceivedRequests")
+  sentRequests     WorkRequest[] @relation("SentRequests")
+  bossRelations    WorkerBoss[]  @relation("Boss")
+  workerRelations  WorkerBoss[]  @relation("Worker")
+
+  @@map("users")
+}
+
+model TimeEntry {
+  id        String    @id @default(cuid())
+  userId    String
+  clockIn   DateTime
+  clockOut  DateTime?
+  duration  Int?
+  earnings  Float?
+  isPrivate Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("time_entries")
+}
+
+model WorkRequest {
+  id         String        @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  status     RequestStatus @default(PENDING)
+  message    String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  toUser     User          @relation("ReceivedRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  fromUser   User          @relation("SentRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+
+  @@map("work_requests")
+}
+
+model WorkerBoss {
+  id        String   @id @default(cuid())
+  workerId  String
+  bossId    String
+  createdAt DateTime @default(now())
+  boss      User     @relation("Boss", fields: [bossId], references: [id], onDelete: Cascade)
+  worker    User     @relation("Worker", fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, bossId])
+  @@map("worker_boss")
+}
+
+enum UserRole {
+  WORKER
+  BOSS
+  ADMIN
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+PRISMA_EOF
+
+echo "✅ Production schema created"
+
+# Generate Prisma client
+echo "🔧 Generating Prisma client..."
 npx prisma generate
+
+# Initialize database with migration
+echo "🗄️ Creating initial migration..."
+npx prisma migrate dev --name init --create-only
 npx prisma migrate deploy
+
+echo "✅ Database migrations completed"
 EOF
 print_success "Database migrations completed"
 
@@ -179,6 +305,10 @@ print_success "Database migrations completed"
 print_status "🔨 Building application..."
 sudo -u $APP_USER bash << EOF
 cd $APP_DIR
+
+# Set Node.js memory options for build
+export NODE_OPTIONS="--max-old-space-size=1024"
+echo "🔨 Building application with optimized memory settings..."
 npm run build
 EOF
 print_success "Application built"
@@ -375,17 +505,35 @@ echo "🚀 Starting deployment..."
 # Pull latest changes
 git pull origin main || git pull origin master
 
-# Install dependencies
-npm ci
+# Clean and install dependencies (avoid cache issues)
+echo "🧹 Cleaning npm cache..."
+npm cache clean --force
+rm -rf node_modules/.cache
+
+# Install dependencies with memory optimization
+echo "📦 Installing dependencies..."
+npm install --no-audit --no-fund
+
+# Update Prisma if needed
+echo "📦 Updating Prisma..."
+npm install --save-dev prisma@latest --no-audit --no-fund
+npm install @prisma/client@latest --no-audit --no-fund
+
+# Set database URL for Prisma commands
+export DATABASE_URL=\$(grep DATABASE_URL .env.production | cut -d '=' -f2- | tr -d '"')
 
 # Run migrations
-npx prisma migrate deploy
+echo "🗄️ Running database migrations..."
 npx prisma generate
+npx prisma migrate deploy
 
-# Build application
+# Build application with memory optimization
+echo "🔨 Building application..."
+export NODE_OPTIONS="--max-old-space-size=1024"
 npm run build
 
 # Reload PM2
+echo "⚡ Reloading application..."
 pm2 reload tootunnid
 
 echo "✅ Deployment completed!"
