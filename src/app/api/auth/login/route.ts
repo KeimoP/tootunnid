@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { verifyPassword, generateToken } from '@/lib/auth'
 import { z } from 'zod'
+import { checkRateLimit, getRateLimitKey, rateLimitResponse } from '@/lib/rateLimit'
+import { sanitizeEmail, detectSpamPatterns, checkDuplicateSubmission } from '@/lib/validation'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -10,12 +12,39 @@ const loginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting
+    const rateLimitKey = getRateLimitKey(request, 'login')
+    const rateLimitResult = checkRateLimit(rateLimitKey, 'login')
+    
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult.resetTime)
+    }
+
     const body = await request.json()
     const { email, password } = loginSchema.parse(body)
 
+    // Sanitize and validate input
+    const sanitizedEmail = sanitizeEmail(email)
+    
+    // Check for spam patterns
+    if (detectSpamPatterns(email) || detectSpamPatterns(password)) {
+      return NextResponse.json(
+        { error: 'Invalid input detected' },
+        { status: 400 }
+      )
+    }
+
+    // Check for duplicate submissions
+    if (checkDuplicateSubmission('anonymous', 'login')) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait.' },
+        { status: 429 }
+      )
+    }
+
     // Find user
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email: sanitizedEmail }
     })
 
     if (!user) {
@@ -53,17 +82,24 @@ export async function POST(request: NextRequest) {
       token,
     })
 
-    // Set HTTP-only cookie
+    // Set HTTP-only cookie with proper security settings
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
+      secure: process.env.NODE_ENV === 'production', // Secure only in production
+      sameSite: 'strict', // Changed to strict for better security
       maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: '/', // Explicitly set path
+      path: '/',
     })
 
     console.log('Login successful for user:', user.email)
     console.log('Setting cookie with token:', token.substring(0, 20) + '...')
+    console.log('Cookie settings:', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/'
+    })
     
     return response
   } catch (error) {

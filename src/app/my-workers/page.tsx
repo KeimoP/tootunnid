@@ -2,98 +2,83 @@
 
 import { useEffect, useState } from 'react'
 import Layout from '@/components/Layout'
-import { User, Users, Clock, DollarSign, Calendar, Eye } from 'lucide-react'
-import { formatCurrency, formatDuration } from '@/lib/utils'
+import { useTranslation } from '@/contexts/LanguageContext'
+import { User, Users, Eye } from 'lucide-react'
+import { formatDuration } from '@/lib/utils'
 import Link from 'next/link'
 
 interface Worker {
   id: string
   name: string
   email: string
-  role: 'WORKER' | 'BOSS'
-  hourlyWage: number
-  createdAt: string
-  timeEntries: {
-    totalMinutes: number
-    totalEarnings: number
-    completedSessions: number
-    lastActivity: string | null
-  }
-}
-
-interface TeamStats {
-  totalWorkers: number
-  totalBosses: number
-  totalHoursWorked: number
-  totalEarningsPaid: number
+  profilePicture: string | null
+  joinDate: string
+  todayMinutes: number
+  totalMinutes: number
 }
 
 export default function MyWorkersPage() {
+  const { t } = useTranslation()
   const [workers, setWorkers] = useState<Worker[]>([])
   const [bosses, setBosses] = useState<Worker[]>([])
-  const [stats, setStats] = useState<TeamStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'workers' | 'bosses'>('workers')
 
   useEffect(() => {
     fetchTeamData()
+    
+    // Add focus listener to refetch data when user returns to page
+    const handleFocus = () => {
+      console.log('Page focused, refetching team data...')
+      fetchTeamData()
+    }
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Page became visible, refetching team data...')
+        fetchTeamData()
+      }
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
 
+  // Set document title
+  useEffect(() => {
+    document.title = t('myWorkers.title')
+  }, [t])
+
   const fetchTeamData = async () => {
+    console.log('Fetching team data...')
+    setLoading(true)
     try {
-      const response = await fetch('/api/team/members', {
-        credentials: 'include'
+      // Add cache-busting parameter to ensure fresh data
+      const response = await fetch(`/api/teamdata?_t=${Date.now()}`, {
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
       })
 
       if (response.ok) {
         const data = await response.json()
+        console.log('Team data received:', data)
         setWorkers(data.workers || [])
         setBosses(data.bosses || [])
-        setStats(data.stats || null)
+      } else {
+        console.error('Failed to fetch team data:', response.status, response.statusText)
       }
     } catch (error) {
       console.error('Failed to fetch team data:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const getRoleColor = (role: string) => {
-    return role === 'BOSS' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-  }
-
-  const getActivityStatus = (lastActivity: string | null) => {
-    if (!lastActivity) {
-      return (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-          No activity
-        </span>
-      )
-    }
-
-    const lastDate = new Date(lastActivity)
-    const now = new Date()
-    const diffHours = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60)
-
-    if (diffHours < 24) {
-      return (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
-          Active today
-        </span>
-      )
-    } else if (diffHours < 168) { // 7 days
-      return (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          Active this week
-        </span>
-      )
-    } else {
-      return (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-          Inactive
-        </span>
-      )
     }
   }
 
@@ -112,66 +97,9 @@ export default function MyWorkersPage() {
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">My Team</h1>
-          <p className="text-gray-600">View your connections and monitor shared work hours.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('myWorkers.title')}</h1>
+          <p className="text-gray-600">{t('myWorkers.subtitle')}</p>
         </div>
-
-        {/* Team Stats */}
-        {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Users className="w-6 h-6 text-blue-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Workers</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalWorkers}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <User className="w-6 h-6 text-purple-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Bosses</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalBosses}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Clock className="w-6 h-6 text-green-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Hours</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatDuration(stats.totalHoursWorked)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <DollarSign className="w-6 h-6 text-orange-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Earnings</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(stats.totalEarningsPaid)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Tab Navigation */}
         <div className="bg-white rounded-lg shadow">
@@ -185,7 +113,7 @@ export default function MyWorkersPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                People Sharing With Me ({workers.length})
+                {t('myWorkers.tabITrack')} ({workers.length})
               </button>
               <button
                 onClick={() => setActiveTab('bosses')}
@@ -195,7 +123,7 @@ export default function MyWorkersPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                People I Share With ({bosses.length})
+                {t('myWorkers.tabTracksMe')} ({bosses.length})
               </button>
             </nav>
           </div>
@@ -207,12 +135,12 @@ export default function MyWorkersPage() {
                 {workers.length === 0 ? (
                   <div className="text-center py-8">
                     <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">No connections found. Send requests to connect with others.</p>
+                    <p className="text-gray-500">{t('myWorkers.noTeamMembersDesc')}</p>
                     <Link
                       href="/work-requests"
                       className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                     >
-                      Manage Work Requests
+                      {t('nav.workRequests')}
                     </Link>
                   </div>
                 ) : (
@@ -230,42 +158,48 @@ export default function MyWorkersPage() {
                             </div>
                           </div>
                           <div className="flex flex-col items-end space-y-1">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(worker.role)}`}>
-                              {worker.role}
-                            </span>
-                            {getActivityStatus(worker.timeEntries.lastActivity)}
+                            {worker.todayMinutes > 0 ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                                {t('myWorkers.activeToday')}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {t('myWorkers.inactive')}
+                              </span>
+                            )}
                           </div>
                         </div>
 
                         <div className="grid grid-cols-3 gap-4 mb-3">
                           <div className="text-center">
-                            <p className="text-xs text-gray-500">Hours Worked</p>
+                            <p className="text-xs text-gray-500">{t('myWorkers.hoursWorked')}</p>
                             <p className="text-sm font-semibold text-gray-900">
-                              {formatDuration(worker.timeEntries.totalMinutes)}
+                              {formatDuration(worker.totalMinutes)}
                             </p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-gray-500">Earnings</p>
+                            <p className="text-xs text-gray-500">Tänane aeg</p>
                             <p className="text-sm font-semibold text-gray-900">
-                              {formatCurrency(worker.timeEntries.totalEarnings)}
+                              {formatDuration(worker.todayMinutes)}
                             </p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-gray-500">Sessions</p>
+                            <p className="text-xs text-gray-500">{t('myWorkers.memberSince')}</p>
                             <p className="text-sm font-semibold text-gray-900">
-                              {worker.timeEntries.completedSessions}
+                              {new Date(worker.joinDate).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span>Hourly Rate: {formatCurrency(worker.hourlyWage)}/hr</span>
+                          <span>{t('myWorkers.memberSince')}: {new Date(worker.joinDate).toLocaleDateString()}</span>
                           <Link
-                            href={`/team/worker/${worker.id}`}
+                            href={`/team/${worker.id}`}
                             className="inline-flex items-center text-blue-600 hover:text-blue-800"
                           >
                             <Eye className="w-3 h-3 mr-1" />
-                            View Details
+                            {t('myWorkers.viewDetails')}
                           </Link>
                         </div>
                       </div>
@@ -281,12 +215,12 @@ export default function MyWorkersPage() {
                 {bosses.length === 0 ? (
                   <div className="text-center py-8">
                     <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">No bosses found. Send work requests to connect with supervisors.</p>
+                    <p className="text-gray-500">{t('myWorkers.noTeamMembersDesc')}</p>
                     <Link
                       href="/work-requests"
                       className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                     >
-                      Manage Work Requests
+                      {t('nav.workRequests')}
                     </Link>
                   </div>
                 ) : (
@@ -303,19 +237,16 @@ export default function MyWorkersPage() {
                               <p className="text-xs text-gray-500">{boss.email}</p>
                             </div>
                           </div>
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(boss.role)}`}>
-                            {boss.role}
-                          </span>
                         </div>
 
                         <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span>Member since: {new Date(boss.createdAt).toLocaleDateString()}</span>
+                          <span>{t('myWorkers.memberSince')}: {new Date(boss.joinDate).toLocaleDateString()}</span>
                           <Link
-                            href={`/team/boss/${boss.id}`}
+                            href={`/team/${boss.id}`}
                             className="inline-flex items-center text-blue-600 hover:text-blue-800"
                           >
                             <Eye className="w-3 h-3 mr-1" />
-                            View Profile
+                            {t('myWorkers.viewProfile')}
                           </Link>
                         </div>
                       </div>

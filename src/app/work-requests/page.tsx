@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useTranslation } from '@/contexts/LanguageContext'
 import Layout from '@/components/Layout'
-import { User, Clock, Check, X, Send, UserPlus } from 'lucide-react'
+import { User, Check, X, UserPlus, Copy, Plus, QrCode } from 'lucide-react'
 
 interface WorkRequest {
   id: string
@@ -30,16 +32,116 @@ interface User {
 }
 
 export default function WorkRequestsPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <WorkRequestsContent />
+    </Suspense>
+  )
+}
+
+function WorkRequestsContent() {
+  const { t } = useTranslation()
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get('tab') as 'received' | 'sent' | 'share-code' || 'share-code'
+  
   const [sentRequests, setSentRequests] = useState<WorkRequest[]>([])
   const [receivedRequests, setReceivedRequests] = useState<WorkRequest[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [sendingRequest, setSendingRequest] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'sent' | 'received' | 'send'>('received')
+  const [activeTab, setActiveTab] = useState<'received' | 'sent' | 'share-code'>(initialTab)
+  const [sharingCode, setSharingCode] = useState<string>('')
+  const [inputCode, setInputCode] = useState<string>('')
+  const [codeLoading, setCodeLoading] = useState(false)
+  const [addingConnection, setAddingConnection] = useState(false)
 
   useEffect(() => {
     fetchData()
-  }, [])
+    fetchSharingCode()
+
+    // Set up auto-refresh for sharing code every 30 seconds
+    // (to ensure we get the new code soon after it rotates every 5 minutes)
+    const codeRefreshInterval = setInterval(() => {
+      if (activeTab === 'share-code') {
+        fetchSharingCode()
+      }
+    }, 30000) // 30 seconds
+
+    return () => {
+      clearInterval(codeRefreshInterval)
+    }
+  }, [activeTab])
+
+  // Set document title
+  useEffect(() => {
+    document.title = t('workRequests.title')
+  }, [t])
+
+  const fetchSharingCode = async () => {
+    try {
+      setCodeLoading(true)
+      console.log('Fetching sharing code...')
+      const response = await fetch('/api/sharing-code', { credentials: 'include' })
+      console.log('Sharing code response:', response.status, response.ok)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Sharing code data:', data)
+        setSharingCode(data.code)
+        console.log('Set sharing code to:', data.code)
+      } else {
+        console.error('Sharing code response not ok:', response.status)
+        const errorData = await response.text()
+        console.error('Error response:', errorData)
+      }
+    } catch (error) {
+      console.error('Error fetching sharing code:', error)
+    } finally {
+      setCodeLoading(false)
+    }
+  }
+
+  const handleUseCode = async () => {
+    if (!inputCode.trim() || inputCode.length !== 6) {
+      alert(t('workRequests.validCodeRequired'))
+      return
+    }
+
+    setAddingConnection(true)
+    try {
+      const response = await fetch('/api/sharing-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: inputCode.trim().toUpperCase() }),
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        alert(t('workRequests.connectionSuccess', { name: data.user.name }))
+        setInputCode('')
+        fetchData() // Refresh the connections
+      } else {
+        const error = await response.json()
+        alert(error.error || t('workRequests.connectionFailed'))
+      }
+    } catch (error) {
+      console.error('Error using code:', error)
+      alert(t('workRequests.connectionFailed'))
+    } finally {
+      setAddingConnection(false)
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      alert(t('workRequests.codeCopied'))
+    } catch (error) {
+      console.error('Failed to copy:', error)
+      alert(t('workRequests.failedToCopy'))
+    }
+  }
 
   const fetchData = async () => {
     try {
@@ -143,8 +245,8 @@ export default function WorkRequestsPage() {
     <Layout>
       <div className="space-y-6">
         <div className="bg-white rounded-lg shadow p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Work Requests</h1>
-          <p className="text-gray-600">Connect with others to share your time tracking or view others&apos; work hours.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('workRequests.title')}</h1>
+          <p className="text-gray-600">{t('workRequests.subtitle')}</p>
         </div>
 
         {/* Tab Navigation */}
@@ -159,7 +261,7 @@ export default function WorkRequestsPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Received ({receivedRequests.filter(r => r.status === 'PENDING').length})
+                {t('workRequests.received')} ({receivedRequests.filter(r => r.status === 'PENDING').length})
               </button>
               <button
                 onClick={() => setActiveTab('sent')}
@@ -169,17 +271,17 @@ export default function WorkRequestsPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Sent ({sentRequests.length})
+                {t('workRequests.sent')} ({sentRequests.length})
               </button>
               <button
-                onClick={() => setActiveTab('send')}
+                onClick={() => setActiveTab('share-code')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'send'
+                  activeTab === 'share-code'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Send Request
+                {t('workRequests.shareCode')}
               </button>
             </nav>
           </div>
@@ -188,9 +290,9 @@ export default function WorkRequestsPage() {
             {/* Received Requests Tab */}
             {activeTab === 'received' && (
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900">Requests You&apos;ve Received</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{t('workRequests.receivedRequests')}</h2>
                 {receivedRequests.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No work requests received yet.</p>
+                  <p className="text-gray-500 text-center py-8">{t('workRequests.noReceivedRequests')}</p>
                 ) : (
                   <div className="space-y-3">
                     {receivedRequests.map((request) => (
@@ -203,7 +305,7 @@ export default function WorkRequestsPage() {
                                 <p className="text-sm font-medium text-gray-900">{request.fromUser.name}</p>
                                 <p className="text-xs text-gray-500">{request.fromUser.email}</p>
                                 <p className="text-xs text-gray-400">
-                                  Role: {request.fromUser.role.toLowerCase()}
+                                  {t('workRequests.role')}: {request.fromUser.role.toLowerCase()}
                                 </p>
                               </div>
                             </div>
@@ -221,21 +323,21 @@ export default function WorkRequestsPage() {
                                   className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                                 >
                                   <Check className="w-3 h-3 mr-1" />
-                                  Accept
+                                  {t('common.accept')}
                                 </button>
                                 <button
                                   onClick={() => respondToRequest(request.id, 'REJECTED')}
                                   className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                 >
                                   <X className="w-3 h-3 mr-1" />
-                                  Reject
+                                  {t('common.reject')}
                                 </button>
                               </div>
                             )}
                           </div>
                         </div>
                         <p className="text-xs text-gray-400 mt-2">
-                          Sent on {new Date(request.createdAt).toLocaleDateString()}
+                          {t('workRequests.sentOn')} {new Date(request.createdAt).toLocaleDateString()}
                         </p>
                       </div>
                     ))}
@@ -247,9 +349,9 @@ export default function WorkRequestsPage() {
             {/* Sent Requests Tab */}
             {activeTab === 'sent' && (
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900">Requests You&apos;ve Sent</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{t('workRequests.sentRequests')}</h2>
                 {sentRequests.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No work requests sent yet.</p>
+                  <p className="text-gray-500 text-center py-8">{t('workRequests.noSentRequests')}</p>
                 ) : (
                   <div className="space-y-3">
                     {sentRequests.map((request) => (
@@ -262,7 +364,7 @@ export default function WorkRequestsPage() {
                                 <p className="text-sm font-medium text-gray-900">{request.toUser.name}</p>
                                 <p className="text-xs text-gray-500">{request.toUser.email}</p>
                                 <p className="text-xs text-gray-400">
-                                  Role: {request.toUser.role.toLowerCase()}
+                                  {t('workRequests.role')}: {request.toUser.role.toLowerCase()}
                                 </p>
                               </div>
                             </div>
@@ -273,7 +375,7 @@ export default function WorkRequestsPage() {
                           </span>
                         </div>
                         <p className="text-xs text-gray-400 mt-2">
-                          Sent on {new Date(request.createdAt).toLocaleDateString()}
+                          {t('workRequests.sentOn')} {new Date(request.createdAt).toLocaleDateString()}
                         </p>
                       </div>
                     ))}
@@ -282,52 +384,79 @@ export default function WorkRequestsPage() {
               </div>
             )}
 
-            {/* Send Request Tab */}
-            {activeTab === 'send' && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900">Send Work Request</h2>
-                {users.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No users available to send requests to.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {users.map((user) => (
-                      <div key={user.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="flex items-center space-x-2">
-                              {getRoleIcon(user.role)}
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                                <p className="text-xs text-gray-500">{user.email}</p>
-                                <p className="text-xs text-gray-400">
-                                  Role: {user.role.toLowerCase()}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <button
-                            onClick={() => sendWorkRequest(user.id)}
-                            disabled={sendingRequest === user.id}
-                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {sendingRequest === user.id ? (
-                              <>
-                                <Clock className="w-4 h-4 mr-2 animate-spin" />
-                                Sending...
-                              </>
-                            ) : (
-                              <>
-                                <Send className="w-4 h-4 mr-2" />
-                                Send Request
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+            {/* Share Code Tab */}
+            {activeTab === 'share-code' && (
+              <div className="space-y-6">
+                {/* Your Sharing Code */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <QrCode className="h-5 w-5 mr-2" />
+                    {t('workRequests.yourSharingCode')}
+                  </h2>
+                  <p className="text-sm text-gray-600 mb-3">
+                    {t('workRequests.shareCodeDesc')}
+                  </p>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                    <p className="text-xs text-blue-700">
+                      <span className="font-medium">{t('workRequests.codeRotationNotice')}</span>
+                    </p>
                   </div>
-                )}
+                  {codeLoading ? (
+                    <div className="flex justify-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : sharingCode ? (
+                    <div className="flex items-center space-x-3 bg-white rounded-lg p-4 border">
+                      <code className="text-2xl font-mono font-bold text-blue-600 tracking-widest">
+                        {sharingCode}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(sharingCode)}
+                        className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Copy className="h-4 w-4" />
+                        <span>{t('common.copy')}</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">{t('workRequests.failedToLoadCode')}</p>
+                  )}
+                </div>
+
+                {/* Enter Code */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Plus className="h-5 w-5 mr-2" />
+                    {t('workRequests.connectToSomeone')}
+                  </h2>
+                  <p className="text-sm text-gray-600 mb-4">
+                    {t('workRequests.enterCodeDesc')}
+                  </p>
+                  <div className="flex space-x-3">
+                    <input
+                      type="text"
+                      value={inputCode}
+                      onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                      placeholder={t('workRequests.enterCodePlaceholder')}
+                      maxLength={6}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 font-mono tracking-widest text-lg"
+                    />
+                    <button
+                      onClick={handleUseCode}
+                      disabled={addingConnection || inputCode.length !== 6}
+                      className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+                    >
+                      {addingConnection ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4" />
+                          <span>{t('common.connect')}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

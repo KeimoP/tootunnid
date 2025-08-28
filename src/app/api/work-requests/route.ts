@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
+import { checkRateLimit } from '@/lib/rateLimit'
+import { checkDuplicateSubmission, detectSpamPatterns, sanitizeString } from '@/lib/validation'
 
 const createRequestSchema = z.object({
   toUserId: z.string().min(1, 'User ID is required'),
@@ -15,8 +17,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Check rate limit for work requests
+    const rateLimitResult = await checkRateLimit(userId, 'teamAction')
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'Too many work requests. Please wait before trying again.' },
+        { status: 429 }
+      )
+    }
+
     const body = await request.json()
     const { toUserId, message } = createRequestSchema.parse(body)
+
+    // Sanitize message if provided
+    const sanitizedMessage = message ? sanitizeString(message) : undefined
+
+    // Check for spam patterns in message
+    if (sanitizedMessage && detectSpamPatterns(sanitizedMessage)) {
+      return NextResponse.json(
+        { error: 'Invalid message content detected.' },
+        { status: 400 }
+      )
+    }
+
+    // Check for duplicate submission
+    if (await checkDuplicateSubmission(userId, `work_request_${toUserId}`)) {
+      return NextResponse.json(
+        { error: 'Duplicate request detected. Please wait before sending another request.' },
+        { status: 429 }
+      )
+    }
 
     // Find receiver by ID
     const receiver = await prisma.user.findUnique({
@@ -75,7 +105,7 @@ export async function POST(request: NextRequest) {
       data: {
         fromUserId: userId,
         toUserId: receiver.id,
-        message: message || '',
+        message: sanitizedMessage || '',
       },
       include: {
         fromUser: {

@@ -1,53 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyTokenEdge } from '@/lib/auth-edge'
+import { addSecurityHeaders } from '@/lib/security-headers'
 
 export async function middleware(request: NextRequest) {
-  // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/register', '/api/auth/login', '/api/auth/register']
   const pathname = request.nextUrl.pathname
 
-  // Skip middleware for public routes and static files
-  if (
-    publicRoutes.includes(pathname) ||
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api/auth') ||
-    pathname === '/'
-  ) {
+  // Skip authentication for public routes
+  const publicRoutes = ['/login', '/register', '/api/auth']
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+  
+  if (isPublicRoute) {
     return NextResponse.next()
   }
 
-  // Get token from cookie
-  const token = request.cookies.get('auth-token')?.value
-  console.log('Middleware - pathname:', pathname, 'token exists:', !!token)
+  try {
+    // Extract token from cookies
+    const token = request.cookies.get('auth-token')?.value
 
-  if (!token) {
-    // Redirect to login if no token
-    console.log('No token found, redirecting to login')
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('from', pathname)
-    return NextResponse.redirect(loginUrl)
-  }
+    if (!token) {
+      // Redirect to login for protected pages
+      if (!pathname.startsWith('/api/')) {
+        return NextResponse.redirect(new URL('/login', request.url))
+      }
+      // Return 401 for API routes
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  // Verify token
-  const payload = await verifyTokenEdge(token)
-  console.log('Token verification result:', !!payload)
-  if (!payload) {
-    // Redirect to login if invalid token
-    console.log('Invalid token, redirecting to login')
-    const response = NextResponse.redirect(new URL('/login', request.url))
+    // Verify token and extract user ID
+    const payload = await verifyTokenEdge(token)
+    
+    if (!payload || !payload.userId) {
+      // Clear invalid token
+      const response = pathname.startsWith('/api/')
+        ? NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+        : NextResponse.redirect(new URL('/login', request.url))
+      
+      response.cookies.delete('auth-token')
+      return response
+    }
+
+    // Add user ID to request headers for API routes
+    if (pathname.startsWith('/api/')) {
+      const requestHeaders = new Headers(request.headers)
+      requestHeaders.set('x-user-id', payload.userId as string)
+      
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      })
+    }
+
+    return NextResponse.next()
+
+  } catch (error) {
+    console.error('Middleware auth error:', error)
+    
+    // Clear invalid token and redirect/return error
+    const response = pathname.startsWith('/api/')
+      ? NextResponse.json({ error: 'Authentication failed' }, { status: 401 })
+      : NextResponse.redirect(new URL('/login', request.url))
+    
     response.cookies.delete('auth-token')
     return response
   }
-
-  // Add user ID to request headers for API routes
-  const requestHeaders = new Headers(request.headers)
-  requestHeaders.set('x-user-id', payload.userId)
-
-  return NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  })
 }
 
 // Configure middleware to run in Node.js runtime instead of Edge Runtime

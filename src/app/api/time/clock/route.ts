@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { calculateDuration, calculateEarnings } from '@/lib/utils'
+import { checkRateLimit, getRateLimitKey, rateLimitResponse } from '@/lib/rateLimit'
+import { validateTimeEntry, checkDuplicateSubmission } from '@/lib/validation'
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,6 +10,22 @@ export async function POST(request: NextRequest) {
     
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Rate limiting
+    const rateLimitKey = getRateLimitKey(request, 'clockAction')
+    const rateLimitResult = checkRateLimit(rateLimitKey, 'clockAction')
+    
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult.resetTime)
+    }
+
+    // Check for duplicate submissions
+    if (checkDuplicateSubmission(userId, 'clockIn')) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait.' },
+        { status: 429 }
+      )
     }
 
     // Check if user has an active time entry (not clocked out)
@@ -52,6 +70,23 @@ export async function PUT(request: NextRequest) {
     
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Check rate limit for clock operations
+    const rateLimitResult = await checkRateLimit(userId, 'clockAction')
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'Too many clock operations. Please wait before trying again.' },
+        { status: 429 }
+      )
+    }
+
+    // Check for duplicate submission
+    if (await checkDuplicateSubmission(userId, 'clock_out')) {
+      return NextResponse.json(
+        { error: 'Duplicate submission detected. Please wait before clocking out again.' },
+        { status: 429 }
+      )
     }
 
     // Find active time entry

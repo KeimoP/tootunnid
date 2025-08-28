@@ -12,7 +12,7 @@ export default function HomePage() {
           credentials: 'include'
         })
         if (response.ok) {
-          window.location.href = '/dashboard'
+          window.location.href = '/clock'
         } else {
           window.location.href = '/login'
         }

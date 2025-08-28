@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Layout from '@/components/Layout'
-import { Clock, Calendar, DollarSign, Filter, Download } from 'lucide-react'
-import { formatCurrency, formatDuration } from '@/lib/utils'
+import { useTranslation } from '@/contexts/LanguageContext'
+import { Clock, Calendar, DollarSign, Filter, Download, Edit, Trash2, X } from 'lucide-react'
+import { formatCurrency, formatDuration, formatTimeByLanguage, formatDateByLanguage } from '@/lib/utils'
 
 interface TimeEntry {
   id: string
@@ -27,15 +28,15 @@ interface TimeEntriesSummary {
 }
 
 export default function TimeEntriesPage() {
+  const { t, language } = useTranslation()
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [summary, setSummary] = useState<TimeEntriesSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
-
-  useEffect(() => {
-    fetchTimeEntries()
-  }, [dateFilter, statusFilter, fetchTimeEntries])
+  const [editingEntry, setEditingEntry] = useState<string | null>(null)
+  const [editClockOutTime, setEditClockOutTime] = useState('')
+  const [removingEntry, setRemovingEntry] = useState<string | null>(null)
 
   const fetchTimeEntries = useCallback(async () => {
     try {
@@ -49,7 +50,7 @@ export default function TimeEntriesPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setTimeEntries(data.entries || [])
+        setTimeEntries(data.timeEntries || [])
         setSummary(data.summary || null)
       }
     } catch (error) {
@@ -58,6 +59,15 @@ export default function TimeEntriesPage() {
       setLoading(false)
     }
   }, [dateFilter, statusFilter])
+
+  useEffect(() => {
+    fetchTimeEntries()
+  }, [fetchTimeEntries])
+
+  // Set document title
+  useEffect(() => {
+    document.title = t('timeEntries.title')
+  }, [t])
 
   const exportData = async () => {
     try {
@@ -83,8 +93,97 @@ export default function TimeEntriesPage() {
       }
     } catch (error) {
       console.error('Failed to export data:', error)
-      alert('Failed to export data. Please try again.')
+      alert(t('timeEntries.exportFailed'))
     }
+  }
+
+  const handleEditTime = (entryId: string, clockOutTime: string | null) => {
+    setEditingEntry(entryId)
+    if (clockOutTime) {
+      // Format the existing clock out time for input
+      const date = new Date(clockOutTime)
+      const formatted = date.toISOString().slice(0, 16) // YYYY-MM-DDTHH:MM format
+      setEditClockOutTime(formatted)
+    } else {
+      // Set current time as default
+      const now = new Date()
+      const formatted = now.toISOString().slice(0, 16)
+      setEditClockOutTime(formatted)
+    }
+  }
+
+  const handleSaveEditTime = async () => {
+    if (!editingEntry || !editClockOutTime) return
+
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/time/entries/${editingEntry}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          clockOut: new Date(editClockOutTime).toISOString()
+        }),
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        alert(t('clock.updateSuccess'))
+        setEditingEntry(null)
+        setEditClockOutTime('')
+        // Refresh data
+        fetchTimeEntries()
+      } else {
+        const data = await response.json()
+        alert(data.error || t('clock.updateError'))
+      }
+    } catch (error) {
+      console.error('Error updating clock out time:', error)
+      alert(t('clock.updateError'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingEntry(null)
+    setEditClockOutTime('')
+  }
+
+  const handleRemoveEntry = (entryId: string) => {
+    setRemovingEntry(entryId)
+  }
+
+  const handleConfirmRemove = async () => {
+    if (!removingEntry) return
+
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/time/entries/${removingEntry}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        alert(t('clock.removeSuccess'))
+        setRemovingEntry(null)
+        // Refresh data
+        fetchTimeEntries()
+      } else {
+        const data = await response.json()
+        alert(data.error || t('clock.removeError'))
+      }
+    } catch (error) {
+      console.error('Error removing time entry:', error)
+      alert(t('clock.removeError'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelRemove = () => {
+    setRemovingEntry(null)
   }
 
   const getStatusBadge = (entry: TimeEntry) => {
@@ -92,13 +191,13 @@ export default function TimeEntriesPage() {
       return (
         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
           <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
-          Active
+          {t('timeEntries.active')}
         </span>
       )
     }
     return (
       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-        Completed
+        {t('timeEntries.completed')}
       </span>
     )
   }
@@ -115,7 +214,7 @@ export default function TimeEntriesPage() {
       case 'month':
         return today.toLocaleDateString('default', { month: 'long', year: 'numeric' })
       default:
-        return 'All Time'
+        return t('timeEntries.allTime')
     }
   }
 
@@ -136,15 +235,15 @@ export default function TimeEntriesPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Time Entries</h1>
-              <p className="text-gray-600">View and manage your work time records.</p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('timeEntries.title')}</h1>
+              <p className="text-gray-600">{t('timeEntries.subtitle')}</p>
             </div>
             <button
               onClick={exportData}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <Download className="w-4 h-4 mr-2" />
-              Export CSV
+              {t('timeEntries.exportCsv')}
             </button>
           </div>
         </div>
@@ -155,34 +254,34 @@ export default function TimeEntriesPage() {
             <Filter className="w-5 h-5 text-gray-400" />
             <div className="flex items-center space-x-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('timeEntries.dateRange')}</label>
                 <select
                   value={dateFilter}
                   onChange={(e) => setDateFilter(e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="border border-gray-300 rounded-md px-3 py-1 text-sm text-gray-900 bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="all">All Time</option>
-                  <option value="today">Today</option>
-                  <option value="week">This Week</option>
-                  <option value="month">This Month</option>
+                  <option value="all">{t('timeEntries.allTime')}</option>
+                  <option value="today">{t('timeEntries.today')}</option>
+                  <option value="week">{t('timeEntries.thisWeek')}</option>
+                  <option value="month">{t('timeEntries.thisMonth')}</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('timeEntries.status')}</label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="border border-gray-300 rounded-md px-3 py-1 text-sm text-gray-900 bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="all">All</option>
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
+                  <option value="all">{t('timeEntries.all')}</option>
+                  <option value="active">{t('timeEntries.active')}</option>
+                  <option value="completed">{t('timeEntries.completed')}</option>
                 </select>
               </div>
             </div>
             <div className="flex-1">
               <p className="text-sm text-gray-500">
-                Showing entries for: <span className="font-medium">{formatDateRange(dateFilter)}</span>
+                {t('timeEntries.showingEntriesFor')} <span className="font-medium">{formatDateRange(dateFilter)}</span>
               </p>
             </div>
           </div>
@@ -197,7 +296,7 @@ export default function TimeEntriesPage() {
                   <Clock className="w-6 h-6 text-blue-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Time</p>
+                  <p className="text-sm font-medium text-gray-500">{t('timeEntries.totalTime')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatDuration(summary.totalMinutes)}
                   </p>
@@ -211,7 +310,7 @@ export default function TimeEntriesPage() {
                   <DollarSign className="w-6 h-6 text-green-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Earnings</p>
+                  <p className="text-sm font-medium text-gray-500">{t('timeEntries.totalEarnings')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(summary.totalEarnings)}
                   </p>
@@ -225,7 +324,7 @@ export default function TimeEntriesPage() {
                   <Calendar className="w-6 h-6 text-purple-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Completed</p>
+                  <p className="text-sm font-medium text-gray-500">{t('timeEntries.completed')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {summary.completedSessions}
                   </p>
@@ -239,7 +338,7 @@ export default function TimeEntriesPage() {
                   <Clock className="w-6 h-6 text-orange-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Sessions</p>
+                  <p className="text-sm font-medium text-gray-500">{t('timeEntries.totalSessions')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {summary.totalSessions}
                   </p>
@@ -252,13 +351,13 @@ export default function TimeEntriesPage() {
         {/* Time Entries Table */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Entries</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t('timeEntries.recentEntries')}</h2>
           </div>
           
           {timeEntries.length === 0 ? (
             <div className="p-8 text-center">
               <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No time entries found for the selected filters.</p>
+              <p className="text-gray-500">{t('timeEntries.noEntriesFound')}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -266,22 +365,25 @@ export default function TimeEntriesPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
+                      {t('timeEntries.date')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Clock In
+                      {t('timeEntries.clockIn')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Clock Out
+                      {t('timeEntries.clockOut')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Duration
+                      {t('timeEntries.duration')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Earnings
+                      {t('timeEntries.earnings')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      {t('timeEntries.status')}
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {t('timeEntries.actions')}
                     </th>
                   </tr>
                 </thead>
@@ -289,13 +391,13 @@ export default function TimeEntriesPage() {
                   {timeEntries.map((entry) => (
                     <tr key={entry.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(entry.clockIn).toLocaleDateString()}
+                        {formatDateByLanguage(entry.clockIn, language)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(entry.clockIn).toLocaleTimeString()}
+                        {formatTimeByLanguage(entry.clockIn, language)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {entry.clockOut ? new Date(entry.clockOut).toLocaleTimeString() : '-'}
+                        {entry.clockOut ? formatTimeByLanguage(entry.clockOut, language) : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {entry.duration ? formatDuration(entry.duration) : '-'}
@@ -306,6 +408,26 @@ export default function TimeEntriesPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(entry)}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-center space-x-2">
+                          {entry.clockOut && (
+                            <button
+                              onClick={() => handleEditTime(entry.id, entry.clockOut)}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title={t('clock.editTime')}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleRemoveEntry(entry.id)}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title={t('clock.remove')}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -313,6 +435,97 @@ export default function TimeEntriesPage() {
             </div>
           )}
         </div>
+
+        {/* Edit Clock Out Time Modal */}
+        {editingEntry && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">{t('clock.editClockOut')}</h3>
+                <button
+                  onClick={handleCancelEdit}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                {t('clock.editClockOutDesc')}
+              </p>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t('clock.clockOutTime')}
+                </label>
+                <input
+                  type="datetime-local"
+                  value={editClockOutTime}
+                  onChange={(e) => setEditClockOutTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleSaveEditTime}
+                  disabled={loading}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  {loading ? t('clock.saving') : t('clock.save')}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  {t('clock.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Remove Time Entry Confirmation Modal */}
+        {removingEntry && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">{t('clock.removeEntry')}</h3>
+                <button
+                  onClick={handleCancelRemove}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-2">
+                  {t('clock.removeConfirm')}
+                </p>
+                <p className="text-sm text-red-600 font-medium">
+                  {t('clock.removeWarning')}
+                </p>
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleConfirmRemove}
+                  disabled={loading}
+                  className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+                >
+                  {loading ? t('clock.removing') : t('clock.remove')}
+                </button>
+                <button
+                  onClick={handleCancelRemove}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  {t('clock.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   )

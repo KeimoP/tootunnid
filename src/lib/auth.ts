@@ -14,7 +14,17 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 export function generateToken(userId: string): string {
   console.log('Generating token for userId:', userId)
   console.log('Using JWT_SECRET:', JWT_SECRET.substring(0, 10) + '...')
-  const token = jwt.sign({ userId }, JWT_SECRET) // Removed expiration temporarily
+  
+  // Add expiration for security (7 days to match cookie)
+  const token = jwt.sign(
+    { userId }, 
+    JWT_SECRET, 
+    { 
+      expiresIn: '7d',
+      algorithm: 'HS256' // Explicitly specify algorithm for security
+    }
+  )
+  
   console.log('Generated token:', token.substring(0, 20) + '...')
   return token
 }
@@ -23,7 +33,11 @@ export function verifyToken(token: string): { userId: string } | null {
   try {
     console.log('Verifying token:', token.substring(0, 20) + '...')
     console.log('Using JWT_SECRET:', JWT_SECRET.substring(0, 10) + '...')
-    const payload = jwt.verify(token, JWT_SECRET) as { userId: string }
+    
+    const payload = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'] // Specify allowed algorithms for security
+    }) as { userId: string }
+    
     console.log('Token verification successful, userId:', payload.userId)
     return payload
   } catch (error) {

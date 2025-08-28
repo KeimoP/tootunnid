@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,66 +8,62 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String
-  hourlyWage Float   @default(0)
-  role      UserRole @default(WORKER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relationships
-  timeEntries       TimeEntry[]
-  sentRequests      WorkRequest[] @relation("SentRequests")
-  receivedRequests  WorkRequest[] @relation("ReceivedRequests")
-  workerRelations   WorkerBoss[]  @relation("Worker")
-  bossRelations     WorkerBoss[]  @relation("Boss")
+  id               String        @id @default(cuid())
+  email            String        @unique
+  name             String
+  password         String
+  hourlyWage       Float         @default(0)
+  role             UserRole      @default(WORKER)
+  sharingCode      String?       @unique
+  profilePicture   String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  encryptedWage    String?
+  timeEntries      TimeEntry[]
+  receivedRequests WorkRequest[] @relation("ReceivedRequests")
+  sentRequests     WorkRequest[] @relation("SentRequests")
+  bossRelations    WorkerBoss[]  @relation("Boss")
+  workerRelations  WorkerBoss[]  @relation("Worker")
 
   @@map("users")
 }
 
 model TimeEntry {
-  id       String   @id @default(cuid())
-  userId   String
-  clockIn  DateTime
-  clockOut DateTime?
-  duration Int?     // Duration in minutes
-  earnings Float?   // Calculated earnings
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relationships
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  userId    String
+  clockIn   DateTime
+  clockOut  DateTime?
+  duration  Int?
+  earnings  Float?
+  isPrivate Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("time_entries")
 }
 
 model WorkRequest {
-  id          String        @id @default(cuid())
-  senderId    String
-  receiverId  String
-  status      RequestStatus @default(PENDING)
-  message     String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  // Relationships
-  sender   User @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  id         String        @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  status     RequestStatus @default(PENDING)
+  message    String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  toUser     User          @relation("ReceivedRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  fromUser   User          @relation("SentRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
 
   @@map("work_requests")
 }
 
 model WorkerBoss {
-  id       String   @id @default(cuid())
-  workerId String
-  bossId   String
+  id        String   @id @default(cuid())
+  workerId  String
+  bossId    String
   createdAt DateTime @default(now())
-
-  // Relationships
-  worker User @relation("Worker", fields: [workerId], references: [id], onDelete: Cascade)
-  boss   User @relation("Boss", fields: [bossId], references: [id], onDelete: Cascade)
+  boss      User     @relation("Boss", fields: [bossId], references: [id], onDelete: Cascade)
+  worker    User     @relation("Worker", fields: [workerId], references: [id], onDelete: Cascade)
 
   @@unique([workerId, bossId])
   @@map("worker_boss")

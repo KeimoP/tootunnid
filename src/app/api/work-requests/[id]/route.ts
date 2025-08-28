@@ -77,25 +77,39 @@ export async function PUT(
       }
     })
 
-    // If accepted, create the worker-boss relationship
+    // If accepted, create bidirectional worker-boss relationships
     if (status === 'ACCEPTED') {
-      // Since everyone has the same role now, we'll create a flexible relationship
-      // The person who sent the request will be able to share their time with the recipient
-      const workerId = workRequest.fromUserId  // Person who sent the request shares their time
-      const bossId = workRequest.toUserId      // Person who receives the request can view the time
+      // Create bidirectional relationships so both users can see each other's time
+      const user1Id = workRequest.fromUserId  // Person who sent the request
+      const user2Id = workRequest.toUserId    // Person who received the request
 
-      // Create the relationship if it doesn't exist
+      // Create first relationship: user1 shares time with user2
       await prisma.workerBoss.upsert({
         where: {
           workerId_bossId: {
-            workerId,
-            bossId
+            workerId: user1Id,
+            bossId: user2Id
           }
         },
         update: {}, // Do nothing if exists
         create: {
-          workerId,
-          bossId
+          workerId: user1Id,
+          bossId: user2Id
+        }
+      })
+
+      // Create second relationship: user2 shares time with user1
+      await prisma.workerBoss.upsert({
+        where: {
+          workerId_bossId: {
+            workerId: user2Id,
+            bossId: user1Id
+          }
+        },
+        update: {}, // Do nothing if exists
+        create: {
+          workerId: user2Id,
+          bossId: user1Id
         }
       })
     }

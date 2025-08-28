@@ -12,8 +12,10 @@ import {
   Menu, 
   X,
   Home,
-  FileText
+  FileText,
+  Globe
 } from 'lucide-react'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -27,7 +29,26 @@ interface User {
   hourlyWage: number
 }
 
-export default function Layout({ children }: LayoutProps) {
+function LanguageSwitcher() {
+  const { language, setLanguage } = useTranslation();
+
+  return (
+    <div className="relative">
+      <select
+        value={language}
+        onChange={(e) => setLanguage(e.target.value as 'et' | 'en')}
+        className="appearance-none bg-white border border-gray-300 rounded px-2 py-1 pr-8 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="et">EST</option>
+        <option value="en">ENG</option>
+      </select>
+      <Globe className="w-4 h-4 absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-500" />
+    </div>
+  );
+}
+
+function LayoutContent({ children }: LayoutProps) {
+  const { t } = useTranslation();
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -65,12 +86,12 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Time Clock', href: '/clock', icon: Clock },
-    { name: 'Time Entries', href: '/time-entries', icon: FileText },
-    { name: 'Profile', href: '/profile', icon: User },
-    { name: 'Work Requests', href: '/work-requests', icon: Send },
-    { name: 'My Team', href: '/my-workers', icon: Users },
+    { name: t('nav.dashboard'), href: '/dashboard', icon: Home },
+    { name: t('nav.clock'), href: '/clock', icon: Clock },
+    { name: t('nav.timeEntries'), href: '/time-entries', icon: FileText },
+    { name: t('nav.profile'), href: '/profile', icon: User },
+    { name: t('nav.workRequests'), href: '/work-requests', icon: Send },
+    { name: t('nav.myWorkers'), href: '/my-workers', icon: Users },
   ]
 
   if (loading) {
@@ -132,7 +153,7 @@ export default function Layout({ children }: LayoutProps) {
               className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
             >
               <LogOut className="w-5 h-5 mr-3" />
-              Logout
+              {t('nav.logout')}
             </button>
           </div>
         </div>
@@ -180,7 +201,7 @@ export default function Layout({ children }: LayoutProps) {
             className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
           >
             <LogOut className="w-5 h-5 mr-3" />
-            Logout
+            {t('nav.logout')}
           </button>
         </div>
       </div>
@@ -195,11 +216,9 @@ export default function Layout({ children }: LayoutProps) {
             <Menu className="w-6 h-6" />
           </button>
           
-          <h2 className="text-xl font-semibold text-gray-900 capitalize">
-            {pathname?.replace('/', '') || 'Dashboard'}
-          </h2>
+          <div></div>
           
-          <div className="w-10"></div>
+          <LanguageSwitcher />
         </div>
         
         <main className="p-4 lg:p-6">
@@ -207,5 +226,11 @@ export default function Layout({ children }: LayoutProps) {
         </main>
       </div>
     </div>
+  )
+}
+
+export default function Layout({ children }: LayoutProps) {
+  return (
+    <LayoutContent>{children}</LayoutContent>
   )
 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { hashPassword, generateToken } from '@/lib/auth'
 import { z } from 'zod'
+import { checkRateLimit } from '@/lib/rateLimit'
+import { checkDuplicateSubmission, detectSpamPatterns, sanitizeString, sanitizeEmail } from '@/lib/validation'
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -12,12 +14,44 @@ const registerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Get client IP for rate limiting
+    const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+    
+    // Check rate limit for registration attempts
+    const rateLimitResult = await checkRateLimit(clientIp, 'register')
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'Too many registration attempts. Please wait before trying again.' },
+        { status: 429 }
+      )
+    }
+
     const body = await request.json()
     const { name, email, password, role } = registerSchema.parse(body)
 
+    // Sanitize and validate inputs for spam
+    const sanitizedName = sanitizeString(name)
+    const sanitizedEmail = sanitizeEmail(email)
+
+    // Check for spam patterns
+    if (detectSpamPatterns(sanitizedName) || detectSpamPatterns(sanitizedEmail)) {
+      return NextResponse.json(
+        { error: 'Invalid input detected. Please provide valid information.' },
+        { status: 400 }
+      )
+    }
+
+    // Check for duplicate submission
+    if (await checkDuplicateSubmission(sanitizedEmail, 'registration')) {
+      return NextResponse.json(
+        { error: 'Duplicate registration detected. Please wait before trying again.' },
+        { status: 429 }
+      )
+    }
+
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email: sanitizedEmail }
     })
 
     if (existingUser) {
@@ -33,8 +67,8 @@ export async function POST(request: NextRequest) {
     // Create user
     const user = await prisma.user.create({
       data: {
-        name,
-        email,
+        name: sanitizedName,
+        email: sanitizedEmail,
         password: hashedPassword,
         role: role as 'WORKER' | 'BOSS',
       },

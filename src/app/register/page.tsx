@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useTranslation } from '@/contexts/LanguageContext'
 import { Eye, EyeOff, Clock } from 'lucide-react'
 
 export default function RegisterPage() {
+  const { t } = useTranslation()
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -45,11 +47,11 @@ export default function RegisterPage() {
           window.location.href = '/dashboard' // Use window.location instead of router.push
         }, 100)
       } else {
-        setError(data.error || 'Registration failed')
+        setError(data.error || t('auth.registrationFailed'))
       }
     } catch (err) {
       console.error('Registration error:', err)
-      setError('Network error. Please try again.')
+      setError(t('auth.networkError'))
     } finally {
       setLoading(false)
     }
@@ -63,8 +65,8 @@ export default function RegisterPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
               <Clock className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Create Account</h1>
-            <p className="text-gray-600">Join TimeTracker and start sharing your work hours</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('auth.createAccount')}</h1>
+            <p className="text-gray-600">{t('auth.joinTimeTracker')}</p>
           </div>
 
           {error && (
@@ -76,7 +78,7 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name
+                {t('auth.fullName')}
               </label>
               <input
                 type="text"
@@ -85,14 +87,14 @@ export default function RegisterPage() {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter your full name"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder={t('auth.enterFullName')}
               />
             </div>
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+                {t('auth.emailAddress')}
               </label>
               <input
                 type="email"
@@ -101,14 +103,14 @@ export default function RegisterPage() {
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter your email"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder={t('auth.enterEmail')}
               />
             </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
+                {t('auth.password')}
               </label>
               <div className="relative">
                 <input
@@ -118,8 +120,8 @@ export default function RegisterPage() {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Create a password"
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder={t('auth.createPassword')}
                 />
                 <button
                   type="button"
@@ -140,15 +142,15 @@ export default function RegisterPage() {
               disabled={loading}
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? t('auth.creatingAccount') : t('auth.createAccount')}
             </button>
           </form>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Already have an account?{' '}
+              {t('auth.haveAccount')}{' '}
               <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
-                Sign in here
+                {t('auth.signInHere')}
               </Link>
             </p>
           </div>
@@ -156,7 +158,7 @@ export default function RegisterPage() {
 
         <div className="text-center mt-8">
           <p className="text-sm text-gray-500">
-            By creating an account, you agree to our Terms of Service
+            {t('auth.termsAgreement')}
           </p>
         </div>
       </div>

@@ -39,3 +39,43 @@ export function formatDateTime(date: Date | string): string {
   const dateObj = typeof date === 'string' ? parseISO(date) : date
   return format(dateObj, 'MMM d, yyyy HH:mm')
 }
+
+export function formatTimeByLanguage(date: Date | string, language: string): string {
+  const dateObj = typeof date === 'string' ? parseISO(date) : date
+  
+  if (language === 'et') {
+    // 24-hour format for Estonian
+    return dateObj.toLocaleTimeString('et-EE', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: false 
+    })
+  } else {
+    // 12-hour format for English
+    return dateObj.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: true 
+    })
+  }
+}
+
+export function formatDateByLanguage(date: Date | string, language: string): string {
+  const dateObj = typeof date === 'string' ? parseISO(date) : date
+  
+  if (language === 'et') {
+    return dateObj.toLocaleDateString('et-EE', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  } else {
+    return dateObj.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  }
+}

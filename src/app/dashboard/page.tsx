@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Layout from '@/components/Layout'
-import { Clock, DollarSign, Calendar, Users } from 'lucide-react'
+import { useTranslation } from '@/contexts/LanguageContext'
+import { Clock, DollarSign, Calendar, Users, Share2 } from 'lucide-react'
 import { formatCurrency, formatDuration } from '@/lib/utils'
 
 interface ClockStatus {
@@ -22,6 +23,7 @@ interface TimeEntriesSummary {
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation()
   const [clockStatus, setClockStatus] = useState<ClockStatus | null>(null)
   const [summary, setSummary] = useState<TimeEntriesSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -29,6 +31,11 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData()
   }, [])
+
+  // Set document title
+  useEffect(() => {
+    document.title = t('dashboard.title')
+  }, [t])
 
   const fetchDashboardData = async () => {
     try {
@@ -90,14 +97,14 @@ export default function DashboardPage() {
       <div className="space-y-6">
         {/* Welcome Section */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to TimeTracker</h1>
-          <p className="text-gray-600">Track your work hours, manage your time, and calculate your earnings.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('dashboard.title')}</h1>
+          <p className="text-gray-600">{t('dashboard.subtitle')}</p>
         </div>
 
         {/* Quick Clock In/Out */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Time Clock</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t('dashboard.timeClock')}</h2>
             <Clock className="w-6 h-6 text-blue-600" />
           </div>
           
@@ -111,13 +118,13 @@ export default function DashboardPage() {
                 <div className={`w-2 h-2 rounded-full mr-2 ${
                   clockStatus?.isClockedIn ? 'bg-green-500' : 'bg-gray-400'
                 }`}></div>
-                {clockStatus?.isClockedIn ? 'Clocked In' : 'Clocked Out'}
+                {clockStatus?.isClockedIn ? t('dashboard.clockedIn') : t('dashboard.clockedOut')}
               </div>
             </div>
             
             {clockStatus?.isClockedIn && clockStatus.activeEntry && (
               <div className="mb-4">
-                <p className="text-sm text-gray-600">Started at</p>
+                <p className="text-sm text-gray-600">{t('dashboard.startedAt')}</p>
                 <p className="text-lg font-semibold">
                   {new Date(clockStatus.activeEntry.clockIn).toLocaleTimeString()}
                 </p>
@@ -132,7 +139,7 @@ export default function DashboardPage() {
                   : 'bg-green-600 hover:bg-green-700 text-white'
               }`}
             >
-              {clockStatus?.isClockedIn ? 'Clock Out' : 'Clock In'}
+              {clockStatus?.isClockedIn ? t('dashboard.clockOut') : t('dashboard.clockIn')}
             </button>
           </div>
         </div>
@@ -146,7 +153,7 @@ export default function DashboardPage() {
                   <Clock className="w-6 h-6 text-blue-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Time</p>
+                  <p className="text-sm font-medium text-gray-500">{t('dashboard.totalTime')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatDuration(summary.totalMinutes)}
                   </p>
@@ -160,7 +167,7 @@ export default function DashboardPage() {
                   <DollarSign className="w-6 h-6 text-green-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Earnings</p>
+                  <p className="text-sm font-medium text-gray-500">{t('dashboard.totalEarnings')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(summary.totalEarnings)}
                   </p>
@@ -174,7 +181,7 @@ export default function DashboardPage() {
                   <Calendar className="w-6 h-6 text-purple-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Completed Sessions</p>
+                  <p className="text-sm font-medium text-gray-500">{t('dashboard.completedSessions')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {summary.completedSessions}
                   </p>
@@ -188,7 +195,7 @@ export default function DashboardPage() {
                   <Users className="w-6 h-6 text-orange-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Sessions</p>
+                  <p className="text-sm font-medium text-gray-500">{t('dashboard.totalSessions')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {summary.totalSessions}
                   </p>
@@ -200,27 +207,38 @@ export default function DashboardPage() {
 
         {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.quickActions')}</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <a
               href="/profile"
               className="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
             >
               <Users className="w-8 h-8 text-blue-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">Update Profile</p>
-                <p className="text-xs text-gray-500">Set hourly wage & preferences</p>
+                <p className="text-sm font-medium text-gray-900">{t('dashboard.updateProfile')}</p>
+                <p className="text-xs text-gray-500">{t('dashboard.updateProfileDesc')}</p>
               </div>
             </a>
 
             <a
-              href="/work-requests"
+              href="/work-requests?tab=share-code"
+              className="flex items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+            >
+              <Share2 className="w-8 h-8 text-orange-600" />
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-900">{t('dashboard.shareHours')}</p>
+                <p className="text-xs text-gray-500">{t('dashboard.shareHoursDesc')}</p>
+              </div>
+            </a>
+
+            <a
+              href="/work-requests?tab=received"
               className="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
             >
               <Clock className="w-8 h-8 text-green-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">Work Requests</p>
-                <p className="text-xs text-gray-500">Send or manage requests</p>
+                <p className="text-sm font-medium text-gray-900">{t('dashboard.connections')}</p>
+                <p className="text-xs text-gray-500">{t('dashboard.connectionsDesc')}</p>
               </div>
             </a>
 
@@ -230,8 +248,8 @@ export default function DashboardPage() {
             >
               <Calendar className="w-8 h-8 text-purple-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">View History</p>
-                <p className="text-xs text-gray-500">See all time entries</p>
+                <p className="text-sm font-medium text-gray-900">{t('dashboard.viewHistory')}</p>
+                <p className="text-xs text-gray-500">{t('dashboard.viewHistoryDesc')}</p>
               </div>
             </a>
           </div>
