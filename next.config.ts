@@ -3,14 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Ensure proper hydration and production stability
   reactStrictMode: true,
-  // Optimize for production
-  swcMinify: true,
   // Handle potential hydration issues
   experimental: {
-    // Disable problematic features that can cause hydration issues
-    optimizeCss: false,
-    // Ensure proper client/server boundary
-    esmExternals: 'loose',
+    // Remove problematic esmExternals setting
   },
   // Output configuration for better debugging
   output: 'standalone',
