@@ -10,7 +10,8 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
   
   if (isPublicRoute) {
-    return NextResponse.next()
+    const response = NextResponse.next()
+    return addSecurityHeaders(response)
   }
 
   try {
@@ -20,10 +21,12 @@ export async function middleware(request: NextRequest) {
     if (!token) {
       // Redirect to login for protected pages
       if (!pathname.startsWith('/api/')) {
-        return NextResponse.redirect(new URL('/login', request.url))
+        const response = NextResponse.redirect(new URL('/login', request.url))
+        return addSecurityHeaders(response)
       }
       // Return 401 for API routes
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return addSecurityHeaders(response)
     }
 
     // Verify token and extract user ID
@@ -36,7 +39,7 @@ export async function middleware(request: NextRequest) {
         : NextResponse.redirect(new URL('/login', request.url))
       
       response.cookies.delete('auth-token')
-      return response
+      return addSecurityHeaders(response)
     }
 
     // Add user ID to request headers for API routes
@@ -44,14 +47,16 @@ export async function middleware(request: NextRequest) {
       const requestHeaders = new Headers(request.headers)
       requestHeaders.set('x-user-id', payload.userId as string)
       
-      return NextResponse.next({
+      const response = NextResponse.next({
         request: {
           headers: requestHeaders,
         },
       })
+      return addSecurityHeaders(response)
     }
 
-    return NextResponse.next()
+    const response = NextResponse.next()
+    return addSecurityHeaders(response)
 
   } catch (error) {
     console.error('Middleware auth error:', error)
@@ -62,7 +67,7 @@ export async function middleware(request: NextRequest) {
       : NextResponse.redirect(new URL('/login', request.url))
     
     response.cookies.delete('auth-token')
-    return response
+    return addSecurityHeaders(response)
   }
 }
 

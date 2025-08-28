@@ -441,7 +441,7 @@ export default function TimeEntriesPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">{t('clock.editClockOut')}</h3>
+                <h3 className="text-lg font-semibold text-blue-900">{t('clock.editClockOut')}</h3>
                 <button
                   onClick={handleCancelEdit}
                   className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
@@ -450,19 +450,22 @@ export default function TimeEntriesPage() {
                 </button>
               </div>
               
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-blue-600 mb-4">
                 {t('clock.editClockOutDesc')}
               </p>
               
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-blue-700 mb-2">
                   {t('clock.clockOutTime')}
                 </label>
                 <input
-                  type="datetime-local"
-                  value={editClockOutTime}
-                  onChange={(e) => setEditClockOutTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  type="time"
+                  value={editClockOutTime ? editClockOutTime.slice(-8, -3) : ''}
+                  onChange={(e) => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    setEditClockOutTime(`${today}T${e.target.value}:00`);
+                  }}
+                  className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-blue-800"
                 />
               </div>
               
