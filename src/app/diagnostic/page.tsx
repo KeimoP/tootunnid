@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Clock } from 'lucide-react'
 
-export default function HomePage() {
+export default function DiagnosticPage() {
   const [status, setStatus] = useState('Loading...')
   const [error, setError] = useState<string | null>(null)
   const [logs, setLogs] = useState<string[]>([])
