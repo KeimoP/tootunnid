@@ -524,21 +524,27 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  // Initialize language from localStorage or default to Estonian
-  const [language, setLanguage] = useState<Language>(() => {
-    if (typeof window !== 'undefined') {
-      const savedLanguage = localStorage.getItem('timetracker-language');
-      return (savedLanguage as Language) || 'et';
-    }
-    return 'et'; // Default to Estonian for SSR
-  });
+  // Initialize language state safely to avoid hydration issues
+  const [language, setLanguage] = useState<Language>('et');
+  const [isClientReady, setIsClientReady] = useState(false);
 
-  // Save language to localStorage whenever it changes
+  // Load language from localStorage only on client side
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const savedLanguage = localStorage.getItem('timetracker-language');
+      if (savedLanguage && (savedLanguage === 'et' || savedLanguage === 'en')) {
+        setLanguage(savedLanguage as Language);
+      }
+      setIsClientReady(true);
+    }
+  }, []);
+
+  // Save language to localStorage whenever it changes (client-side only)
+  useEffect(() => {
+    if (isClientReady && typeof window !== 'undefined') {
       localStorage.setItem('timetracker-language', language);
     }
-  }, [language]);
+  }, [language, isClientReady]);
 
   const t = (key: TranslationKey, params?: Record<string, string>): string => {
     let text = translations[language][key] || translations.en[key] || key;
